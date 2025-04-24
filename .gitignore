@@ -1,0 +1,37 @@
+# Ignore environment variable files
+.env
+
+# Ignore Python cache files
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Ignore log files
+*.log
+*.log.*
+
+# Ignore virtual environment directories
+venv/
+env/
+.venv/
+
+# Ignore system files
+.DS_Store
+Thumbs.db
+
+# Ignore IDE-specific files
+.vscode/
+.idea/
+
+# Ignore compiled files
+*.so
+*.dll
+*.exe
+
+# Ignore changelog hash file
+last_changelog.json
+
+# Ignore other sensitive or temporary files
+*.bak
+*.swp
+*.tmp
