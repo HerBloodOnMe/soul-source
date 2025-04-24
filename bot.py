@@ -6,48 +6,41 @@ import logging
 import json
 import hashlib
 import subprocess
+import random
+import string
 from discord.ext import tasks, commands
 from dotenv import load_dotenv
 from discord import app_commands
 from discord.ui import Button, View
-
 logging.basicConfig(filename="bot_errors.log", level=logging.ERROR)
-
 def log_error(e):
     logging.error(f"{e}")
-
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 SERVER_USER_IDS_FILE = "server_user_ids.json"
-
 ROBLOX_COOKIES = [
     os.getenv("ROBLOX_COOKIE_1"),
     os.getenv("ROBLOX_COOKIE_2"),
     os.getenv("ROBLOX_COOKIE_3")
 ]
-
-cookie_index = 0 
-
+cookie_index = 0
 def get_next_cookie():
     global cookie_index
     cookie = ROBLOX_COOKIES[cookie_index]
-    cookie_index = (cookie_index + 1) % len(ROBLOX_COOKIES) 
+    cookie_index = (cookie_index + 1) % len(ROBLOX_COOKIES)
     return cookie
-
 if not TOKEN:
     raise EnvironmentError("DISCORD_TOKEN is not set in the environment variables.")
-
 def load_server_user_ids():
     try:
         with open(SERVER_USER_IDS_FILE, 'r') as file:
             return json.load(file)
     except FileNotFoundError:
-        return {}  
+        return {}
     except Exception as e:
         log_error(e)
         print(f"Failed to load server user IDs: {e}")
         return {}
-
 def save_server_user_ids():
     try:
         with open(SERVER_USER_IDS_FILE, 'w') as file:
@@ -55,31 +48,24 @@ def save_server_user_ids():
     except Exception as e:
         log_error(e)
         print(f"Failed to save server user IDs: {e}")
-
 server_user_ids = load_server_user_ids()
-
+server_item_ids = {}
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="!", intents=intents)
-
 tree = bot.tree
-
 data_cache = {}
-
 GROUP_ID = 15574158
 group_cache = {
     "members": set(),
     "last_shout": None
 }
-
 STATUS_MAP = {
     0: "Offline",
     1: "Online",
     2: "In Game",
     3: "In Studio"
 }
-
 LAST_CHANGELOG_FILE = "last_changelog.json"
-
 def load_last_changelog():
     try:
         if os.path.exists(LAST_CHANGELOG_FILE):
@@ -89,40 +75,33 @@ def load_last_changelog():
     except Exception as e:
         log_error(e)
         return {}
-
 def save_last_changelog(version):
     try:
         with open(LAST_CHANGELOG_FILE, "w") as file:
             json.dump({"version": version}, file)
     except Exception as e:
         log_error(e)
-
-
-
 def extract_latest_changelog(changelog_content: str) -> str:
     """
     Extracts the latest changelog entry from the changelog content.
-    Assumes the changelog is formatted with headings (e.g., ## [Version]).
+    Assumes the changelog is formatted with headings (e.g.,
     """
     try:
         lines = changelog_content.splitlines()
         latest_entry = []
         in_latest_section = False
-
         for line in lines:
-            if line.startswith("## "):  
+            if line.startswith("
                 if in_latest_section:
-                    break  
+                    break
                 in_latest_section = True
             if in_latest_section:
                 latest_entry.append(line)
-
         return "\n".join(latest_entry).strip()
     except Exception as e:
         log_error(e)
         print("Failed to extract the latest changelog entry.")
         return "Failed to extract the latest changelog entry."
-
 def get_roblox_presence(user_id: str) -> str:
     url = "https://presence.roblox.com/v1/presence/users"
     headers = {
@@ -130,7 +109,6 @@ def get_roblox_presence(user_id: str) -> str:
         "Cookie": f".ROBLOSECURITY={get_next_cookie()}"
     }
     json_data = {"userIds": [int(user_id)]}
-
     try:
         response = requests.post(url, json=json_data, headers=headers)
         response.raise_for_status()
@@ -142,26 +120,22 @@ def get_roblox_presence(user_id: str) -> str:
         log_error(e)
         print(f"Failed to get status for user {user_id}: {e}")
         return "Unknown"
-
 def get_user_details(user_id: str):
     url = f"https://users.roblox.com/v1/users/{user_id}"
     try:
         response = requests.get(url)
         response.raise_for_status()
         user_data = response.json()
-
         display_name = user_data.get("displayName", "No display name")
         username = user_data.get("name", "No username")
         description = user_data.get("description", "No description available.")
         is_banned = user_data.get("isBanned", False)
-
         return {
             "display_name": display_name,
             "username": username,
             "description": description,
             "is_banned": is_banned
         }
-
     except Exception as e:
         log_error(e)
         print(f"Failed to get user details for user {user_id}: {e}")
@@ -171,7 +145,6 @@ def get_user_details(user_id: str):
             "description": "No description available.",
             "is_banned": False
         }
-
 def get_file_hash(file_path):
     """
     Calculate the hash of a file to detect changes.
@@ -181,39 +154,31 @@ def get_file_hash(file_path):
             return hashlib.md5(file.read()).hexdigest()
     except FileNotFoundError:
         return None
-
 async def check_and_send_changelog():
     """
     Check if the changelog.md file has changed and send the latest changelog if it has.
     """
     changelog_file = "changelog.md"
     last_changelog_file = "last_changelog.json"
-
     current_hash = get_file_hash(changelog_file)
-
     try:
         with open(last_changelog_file, "r") as file:
             last_data = json.load(file)
             last_hash = last_data.get("hash")
     except FileNotFoundError:
         last_hash = None
-
     if current_hash != last_hash:
         print("Changelog has changed. Sending updates...")
-
         with open(changelog_file, "r") as file:
             changelog_content = file.read()
         latest_changelog = extract_latest_changelog(changelog_content)
-
         if latest_changelog and not latest_changelog.startswith("Failed"):
-            version = latest_changelog.splitlines()[0].strip("## ").strip()
+            version = latest_changelog.splitlines()[0].strip("
             await send_changelog_to_all_guilds(latest_changelog, version)
-
         with open(last_changelog_file, "w") as file:
             json.dump({"hash": current_hash}, file)
     else:
         print("No changes detected in changelog.md.")
-
 async def pull_and_check_changelog():
     """
     Perform a git pull and check for changes in the changelog.md file.
@@ -222,33 +187,27 @@ async def pull_and_check_changelog():
         result = subprocess.run(["git", "pull"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         print(result.stdout)
         print(result.stderr)
-
         await check_and_send_changelog()
     except Exception as e:
         log_error(e)
         print("Failed to pull changes or check the changelog.")
-
-@tasks.loop(minutes=10)  
+@tasks.loop(minutes=10)
 async def update_changelog_task():
     await pull_and_check_changelog()
-
 @bot.event
 async def on_ready():
     print(f"Bot connected as {bot.user}")
-
     update_changelog_task.start()
-
     if check_status.is_running():
         check_status.cancel()
     check_status.start()
-
+    check_item_prices.start()
     try:
-        synced = await tree.sync()  
+        synced = await tree.sync()
         print(f"Slash commands re-synced successfully: {len(synced)} commands.")
     except Exception as e:
         print(f"Failed to sync commands: {e}")
     print("Starting tasks...")
-
 @bot.event
 async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandNotFound):
@@ -264,47 +223,35 @@ async def on_command_error(ctx, error):
         embed.add_field(name="!setup", value="Set up the bot's categories and channels.\nUsage: `!setup`", inline=False)
         embed.add_field(name="!unsetup", value="Remove the bot's categories and channels.\nUsage: `!unsetup`", inline=False)
         embed.add_field(name="!h", value="Show this help message.\nUsage: `!h`", inline=False)
-
         await ctx.send(embed=embed, delete_after=30)
-
 @tasks.loop(seconds=30)
 async def check_status():
-    print(f"Checking status for servers: {server_user_ids.keys()}")  
+    print(f"Checking status for servers: {server_user_ids.keys()}")
     for guild_id, user_ids in server_user_ids.items():
         guild = bot.get_guild(int(guild_id))
         if not guild:
-            print(f"Guild with ID {guild_id} not found.")  
+            print(f"Guild with ID {guild_id} not found.")
             continue
-
         if guild_id not in data_cache:
             data_cache[guild_id] = {}
-
         soul_category = discord.utils.get(guild.categories, name="Soul")
         if not soul_category:
             print(f"⚠️ Soul category not found in guild {guild.name}. Skipping...")
             continue
-
         status_channel = discord.utils.get(soul_category.channels, name="status-updates")
         if not status_channel:
             print(f"⚠️ Status Updates channel not found in guild {guild.name}. Skipping...")
             continue
-
-        print(f"Processing guild: {guild.name}, channel: {status_channel.name}")  
-
+        print(f"Processing guild: {guild.name}, channel: {status_channel.name}")
         for user_id in user_ids:
             if user_id not in data_cache[guild_id]:
                 data_cache[guild_id][user_id] = {"last_status": None}
-
             current_status = get_roblox_presence(user_id)
             previous_status = data_cache[guild_id][user_id]["last_status"]
-
             if current_status == previous_status:
                 continue
-
             data_cache[guild_id][user_id]["last_status"] = current_status
-
             user_details = get_user_details(user_id)
-
             avatar_url = f"https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds={user_id}&size=352x352&format=Png&isCircular=false"
             try:
                 response = requests.get(avatar_url)
@@ -314,13 +261,11 @@ async def check_status():
             except Exception as e:
                 log_error(e)
                 avatar_url = None
-
-            embed_color = discord.Color.blue() 
+            embed_color = discord.Color.blue()
             if current_status == "In Game":
-                embed_color = discord.Color.green()  
+                embed_color = discord.Color.green()
             elif current_status == "Offline":
-                embed_color = discord.Color.red() 
-
+                embed_color = discord.Color.red()
             embed = discord.Embed(
                 title=f"{user_details['username']}",
                 color=embed_color
@@ -332,12 +277,9 @@ async def check_status():
             embed.add_field(name="USER ID", value=user_id, inline=False)
             embed.add_field(name="DISPLAY NAME", value=user_details["display_name"], inline=False)
             embed.add_field(name="USERNAME", value=user_details["username"], inline=False)
-
             if avatar_url:
                 embed.set_thumbnail(url=avatar_url)
-
             await status_channel.send(embed=embed)
-
 @bot.event
 async def on_guild_join(guild):
     """
@@ -346,11 +288,9 @@ async def on_guild_join(guild):
     default_channel = next((channel for channel in guild.text_channels if channel.permissions_for(guild.me).send_messages), None)
     if default_channel:
         await default_channel.send("This is a fallback message!")
-
     if not default_channel:
         print(f"⚠️ No suitable channel found in guild {guild.name} to send the welcome message.")
         return
-
     try:
         with open("README.md", "r") as readme_file:
             readme_content = readme_file.read()
@@ -358,33 +298,27 @@ async def on_guild_join(guild):
         log_error(e)
         print("⚠️ Failed to read the README.md file.")
         return
-
     about_section = []
     commands_section = []
     in_about = False
     in_commands = False
-
     for line in readme_content.splitlines():
-        if line.startswith("## About"):
+        if line.startswith("
             in_about = True
             in_commands = False
-        elif line.startswith("### Commands"):
+        elif line.startswith("
             in_about = False
             in_commands = True
-        elif line.startswith("## "): 
+        elif line.startswith("
             in_about = False
             in_commands = False
-
         if in_about:
             about_section.append(line)
         elif in_commands:
             commands_section.append(line)
-
     about_text = "\n".join(about_section).strip()
     commands_text = "\n".join(commands_section).strip()
-
     commands_chunks = [commands_text[i:i + 1024] for i in range(0, len(commands_text), 1024)]
-
     welcome_embed = discord.Embed(
         title="Welcome to SOUL Bot!",
         description="Thank you for adding SOUL Bot to your server! Here's how to get started:",
@@ -392,7 +326,6 @@ async def on_guild_join(guild):
     )
     welcome_embed.add_field(name="About", value=about_text[:1024], inline=False)
     welcome_embed.set_footer(text="SOULBOT MADE BY GRAVE @ soullessgraves.us")
-
     commands_embeds = []
     for i, chunk in enumerate(commands_chunks):
         commands_embed = discord.Embed(
@@ -402,29 +335,24 @@ async def on_guild_join(guild):
         )
         commands_embed.set_footer(text="SOULBOT MADE BY GRAVE @ soullessgraves.us")
         commands_embeds.append(commands_embed)
-
     setup_embed = discord.Embed(
         title="Setup Instructions",
         description="Run the `!setup` command to create the necessary categories and channels for the bot to function properly.",
         color=discord.Color.blue()
     )
     setup_embed.set_footer(text="SOULBOT MADE BY GRAVE @ soullessgraves.us")
-
     await default_channel.send(embed=welcome_embed)
     for embed in commands_embeds:
         await default_channel.send(embed=embed)
     await default_channel.send(embed=setup_embed)
-
 @bot.command(name="track")
 async def track_command(ctx, *inputs: str):
-    guild_id = str(ctx.guild.id)  
+    guild_id = str(ctx.guild.id)
     if guild_id not in server_user_ids:
-        server_user_ids[guild_id] = []  
-
+        server_user_ids[guild_id] = []
     guild = ctx.guild
     soul_category = discord.utils.get(guild.categories, name="Soul")
     logs_channel = discord.utils.get(soul_category.channels, name="addedremoved-users-logs") if soul_category else None
-
     for input_value in inputs:
         if input_value.isdigit():
             user_id = input_value
@@ -452,10 +380,8 @@ async def track_command(ctx, *inputs: str):
                 )
                 await ctx.send(embed=error_embed, delete_after=30)
                 continue
-
         if user_id in server_user_ids[guild_id]:
             user_details = get_user_details(user_id)
-
             avatar_url = f"https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds={user_id}&size=352x352&format=Png&isCircular=false"
             try:
                 response = requests.get(avatar_url)
@@ -465,7 +391,6 @@ async def track_command(ctx, *inputs: str):
             except Exception as e:
                 log_error(e)
                 avatar_url = None
-
             already_tracked_embed = discord.Embed(
                 title="User Already Tracked",
                 description=f"**Username:** {user_details['username']}\n**User ID:** {user_id}",
@@ -477,9 +402,7 @@ async def track_command(ctx, *inputs: str):
             await ctx.send(embed=already_tracked_embed)
         else:
             server_user_ids[guild_id].append(user_id)
-
             user_details = get_user_details(user_id)
-
             avatar_url = f"https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds={user_id}&size=352x352&format=Png&isCircular=false"
             try:
                 response = requests.get(avatar_url)
@@ -489,7 +412,6 @@ async def track_command(ctx, *inputs: str):
             except Exception as e:
                 log_error(e)
                 avatar_url = None
-
             if logs_channel:
                 log_embed = discord.Embed(
                     title="User Added to Tracking",
@@ -500,15 +422,12 @@ async def track_command(ctx, *inputs: str):
                 if avatar_url:
                     log_embed.set_thumbnail(url=avatar_url)
                 await logs_channel.send(embed=log_embed)
-
     save_server_user_ids()
-
 @bot.command(name="untrack")
 async def untrack_command(ctx, user_input: str):
-    guild_id = str(ctx.guild.id) 
+    guild_id = str(ctx.guild.id)
     if guild_id not in server_user_ids:
-        server_user_ids[guild_id] = []  
-
+        server_user_ids[guild_id] = []
     if user_input.isdigit():
         user_id = user_input
     else:
@@ -535,17 +454,13 @@ async def untrack_command(ctx, user_input: str):
             )
             await ctx.send(embed=error_embed, delete_after=30)
             return
-
     guild = ctx.guild
     soul_category = discord.utils.get(guild.categories, name="Soul")
     logs_channel = discord.utils.get(soul_category.channels, name="addedremoved-users-logs") if soul_category else None
-
     if user_id in server_user_ids[guild_id]:
         server_user_ids[guild_id].remove(user_id)
         save_server_user_ids()
-
         user_details = get_user_details(user_id)
-
         avatar_url = f"https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds={user_id}&size=352x352&format=Png&isCircular=false"
         try:
             response = requests.get(avatar_url)
@@ -555,7 +470,6 @@ async def untrack_command(ctx, user_input: str):
         except Exception as e:
             log_error(e)
             avatar_url = None
-
         if logs_channel:
             log_embed = discord.Embed(
                 title="User Removed from Tracking",
@@ -573,11 +487,9 @@ async def untrack_command(ctx, user_input: str):
             color=discord.Color.red()
         )
         await ctx.send(embed=error_embed, delete_after=30)
-
 @bot.command(name="setup")
 async def setup_command(ctx):
     guild = ctx.guild
-
     soul_category = discord.utils.get(guild.categories, name="Soul")
     if soul_category:
         error_embed = discord.Embed(
@@ -587,7 +499,6 @@ async def setup_command(ctx):
         )
         await ctx.send(embed=error_embed, delete_after=30)
         return
-
     embed = discord.Embed(
         title="Setup Permission",
         description="I can create the following category and channels:\n\n"
@@ -599,10 +510,8 @@ async def setup_command(ctx):
         color=discord.Color.blue()
     )
     await ctx.send(embed=embed)
-
     def check(m):
         return m.author == ctx.author and m.channel == ctx.channel and m.content.lower() in ["yes", "no"]
-
     try:
         msg = await bot.wait_for("message", check=check, timeout=30)
         if msg.content.lower() == "no":
@@ -611,19 +520,14 @@ async def setup_command(ctx):
     except asyncio.TimeoutError:
         await ctx.send("Setup timed out. Please run the command again.", delete_after=30)
         return
-
     soul_category = await guild.create_category("Soul")
     await guild.create_text_channel("Added/Removed Users Logs", category=soul_category)
     await guild.create_text_channel("Status Updates", category=soul_category)
     await guild.create_text_channel("Changelogs", category=soul_category)
-
     await ctx.send("Setup complete!", delete_after=30)
-
-
 @bot.command(name="unsetup")
 async def unsetup_command(ctx):
     guild = ctx.guild
-
     category = discord.utils.get(guild.categories, name="Soul")
     if not category:
         error_embed = discord.Embed(
@@ -633,23 +537,17 @@ async def unsetup_command(ctx):
         )
         await ctx.send(embed=error_embed, delete_after=30)
         return
-
     for channel in category.channels:
         await channel.delete()
     await category.delete()
-
     await ctx.send("Unsetup complete! The **Soul** category and its channels have been deleted.", delete_after=30)
-
-
 @bot.command(name="tracking")
 async def tracking_command(ctx):
-    guild_id = str(ctx.guild.id)  
+    guild_id = str(ctx.guild.id)
     if guild_id not in server_user_ids or not server_user_ids[guild_id]:
         await ctx.send("⚠️ No users are currently being tracked in this server.")
         return
-
     embed = discord.Embed(title="Tracking List", description="Currently tracked users", color=discord.Color.blue())
-
     for user_id in server_user_ids[guild_id]:
         user_details = get_user_details(user_id)
         embed.add_field(
@@ -657,10 +555,7 @@ async def tracking_command(ctx):
             value=f"**Display Name:** {user_details['display_name']}\n**Description:** {user_details['description']}",
             inline=False
         )
-
     await ctx.send(embed=embed)
-
-
 @bot.command(name="whois")
 async def whois_command(ctx, user_input: str):
     """
@@ -692,7 +587,6 @@ async def whois_command(ctx, user_input: str):
             )
             await ctx.send(embed=error_embed, delete_after=30)
             return
-
     user_details = get_user_details(user_id)
     if user_details["username"] == "No username":
         error_embed = discord.Embed(
@@ -702,7 +596,6 @@ async def whois_command(ctx, user_input: str):
         )
         await ctx.send(embed=error_embed, delete_after=30)
         return
-
     avatar_url = f"https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds={user_id}&size=352x352&format=Png&isCircular=false"
     try:
         response = requests.get(avatar_url)
@@ -712,7 +605,6 @@ async def whois_command(ctx, user_input: str):
     except Exception as e:
         log_error(e)
         avatar_url = None
-
     embed = discord.Embed(
         title=f"Whois for {user_details['username']}",
         description=f"**Display Name:** {user_details['display_name']}\n**Description:** {user_details['description']}",
@@ -721,10 +613,7 @@ async def whois_command(ctx, user_input: str):
     embed.add_field(name="User ID", value=user_id, inline=False)
     embed.add_field(name="Is Banned", value="Yes" if user_details["is_banned"] else "No", inline=False)
     embed.set_thumbnail(url=avatar_url)
-
     await ctx.send(embed=embed)
-
-
 @bot.command(name="whois_display")
 async def whois_display_command(ctx, *, display_name: str):
     """
@@ -732,7 +621,7 @@ async def whois_display_command(ctx, *, display_name: str):
     """
     url = "https://users.roblox.com/v1/users/search"
     try:
-        response = requests.get(url, params={"keyword": display_name, "limit": 10})  
+        response = requests.get(url, params={"keyword": display_name, "limit": 10})
         response.raise_for_status()
         data = response.json()
         users = data.get("data", [])
@@ -745,7 +634,6 @@ async def whois_display_command(ctx, *, display_name: str):
         )
         await ctx.send(embed=error_embed, delete_after=30)
         return
-
     if not users:
         error_embed = discord.Embed(
             title="No Users Found",
@@ -754,13 +642,11 @@ async def whois_display_command(ctx, *, display_name: str):
         )
         await ctx.send(embed=error_embed, delete_after=30)
         return
-
     pages = []
     for user in users:
         user_id = user.get("id", "Unknown")
         username = user.get("name", "Unknown")
         display_name = user.get("displayName", "Unknown")
-
         avatar_url = f"https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds={user_id}&size=352x352&format=Png&isCircular=false"
         try:
             response = requests.get(avatar_url)
@@ -770,7 +656,6 @@ async def whois_display_command(ctx, *, display_name: str):
         except Exception as e:
             log_error(e)
             avatar_url = None
-
         embed = discord.Embed(
             title=f"Whois for Display Name: {display_name}",
             description=f"**Username:** {username}\n**User ID:** {user_id}",
@@ -779,51 +664,38 @@ async def whois_display_command(ctx, *, display_name: str):
         if avatar_url:
             embed.set_thumbnail(url=avatar_url)
         pages.append(embed)
-
     current_page = 0
-
     async def send_page(page_index):
         return await ctx.send(embed=pages[page_index], view=view)
-
     async def previous_callback(interaction):
         nonlocal current_page
         if current_page > 0:
             current_page -= 1
             await interaction.response.edit_message(embed=pages[current_page], view=view)
-
     async def next_callback(interaction):
         nonlocal current_page
         if current_page < len(pages) - 1:
             current_page += 1
             await interaction.response.edit_message(embed=pages[current_page], view=view)
-
     async def finish_callback(interaction):
         await interaction.message.delete()
         await ctx.message.delete()
-
     previous_button = Button(label="⬅️ Previous", style=discord.ButtonStyle.primary)
     next_button = Button(label="➡️ Next", style=discord.ButtonStyle.primary)
     finish_button = Button(label="Finished", style=discord.ButtonStyle.danger)
-
     previous_button.callback = previous_callback
     next_button.callback = next_callback
     finish_button.callback = finish_callback
-
-    view = View(timeout=30) 
+    view = View(timeout=30)
     if len(pages) > 1:
         view.add_item(previous_button)
         view.add_item(next_button)
     view.add_item(finish_button)
-
     message = await send_page(current_page)
-
     async def on_timeout():
         await message.delete()
         await ctx.message.delete()
-
     view.on_timeout = on_timeout
-
-
 @bot.command(name="h")
 async def help_command(ctx):
     embed = discord.Embed(
@@ -838,28 +710,24 @@ async def help_command(ctx):
     embed.add_field(name="!tracking", value="List all currently tracked users.\nUsage: `!tracking`", inline=False)
     embed.add_field(name="!setup", value="Set up the bot's categories and channels.\nUsage: `!setup`", inline=False)
     embed.add_field(name="!unsetup", value="Remove the bot's categories and channels.\nUsage: `!unsetup`", inline=False)
+    embed.add_field(name="!user", value="Check if a username is available and get suggestions if it's not.\nUsage: `!user <username>`", inline=False)
+    embed.add_field(name="!string", value="Generate a 20-character random string.\nUsage: `!string`", inline=False)
     embed.add_field(name="!h", value="Show this help message.\nUsage: `!h`", inline=False)
-
     await ctx.send(embed=embed)
-
-
 @bot.command(name="changelog")
-@commands.has_permissions(administrator=True)  
+@commands.has_permissions(administrator=True)
 async def changelog_command(ctx, *, message: str):
     """
     Sends a changelog update to the Changelogs channel.
     """
     guild = ctx.guild
-
     await send_changelog_update(guild, message)
-
     confirmation_embed = discord.Embed(
         title="Changelog Sent",
         description="Your changelog update has been sent to the **Changelogs** channel.",
         color=discord.Color.green()
     )
     await ctx.send(embed=confirmation_embed, delete_after=10)
-
 @bot.command(name="push_changelog_all")
 @commands.has_permissions(administrator=True)
 async def push_changelog_all_command(ctx, *, message: str):
@@ -868,34 +736,27 @@ async def push_changelog_all_command(ctx, *, message: str):
     """
     for guild in bot.guilds:
         await send_changelog_update(guild, message)
-
     confirmation_embed = discord.Embed(
         title="Changelog Sent to All Servers",
         description="Your changelog update has been sent to the **Changelogs** channel in all servers.",
         color=discord.Color.green()
     )
     await ctx.send(embed=confirmation_embed, delete_after=10)
-
-
 async def send_changelog_update(guild, message: str):
     """
     Sends a changelog update to the Changelogs channel in the specified guild.
     """
     soul_category = discord.utils.get(guild.categories, name="Soul")
     changelogs_channel = discord.utils.get(soul_category.channels, name="changelogs") if soul_category else None
-
     if not changelogs_channel:
         print(f"⚠️ Changelogs channel not found in guild {guild.name}.")
         return
-
     embed = discord.Embed(
         title="Changelog Update",
         description=message,
         color=discord.Color.gold()
     )
     await changelogs_channel.send(embed=embed)
-
-
 async def send_changelog_to_all_guilds(changelog_message: str, version: str):
     """
     Sends the latest changelog to the Changelogs channel in all guilds if it hasn't been sent already.
@@ -904,24 +765,264 @@ async def send_changelog_to_all_guilds(changelog_message: str, version: str):
     if last_changelog.get("version") == version:
         print("Changelog has already been sent. Skipping...")
         return
-
     for guild in bot.guilds:
         soul_category = discord.utils.get(guild.categories, name="Soul")
         changelogs_channel = discord.utils.get(soul_category.channels, name="changelogs") if soul_category else None
-
         if not changelogs_channel:
             print(f"⚠️ Changelogs channel not found in guild {guild.name}.")
             continue
-
         embed = discord.Embed(
             title="Changelog Update",
             description=changelog_message,
             color=discord.Color.gold()
         )
         await changelogs_channel.send(embed=embed)
-
     save_last_changelog(version)
-
-
+@bot.command(name="item")
+async def item_command(ctx, item_id: int):
+    """
+    Fetch and display details about a Roblox limited item by its ID.
+    """
+    resale_url = f"https://economy.roblox.com/v1/assets/{item_id}/resale-data"
+    catalog_url = f"https://catalog.roblox.com/v1/catalog/items/details"
+    thumbnail_url = f"https://thumbnails.roblox.com/v1/assets?assetIds={item_id}&size=420x420&format=Png&isCircular=false"
+    headers = {
+        "Content-Type": "application/json",
+        "Cookie": f".ROBLOSECURITY={get_next_cookie()}"
+    }
+    try:
+        resale_response = requests.get(resale_url, headers=headers)
+        resale_response.raise_for_status()
+        resale_data = resale_response.json()
+        print("Resale Data:", resale_data)
+        if "recentAveragePrice" not in resale_data or "priceDataPoints" not in resale_data:
+            await ctx.send(f"Item ID `{item_id}` is not a limited item and cannot be tracked.")
+            return
+        catalog_payload = {"items": [{"itemType": "Asset", "id": item_id}]}
+        catalog_headers = headers.copy()
+        catalog_response = requests.post(catalog_url, json=catalog_payload, headers=catalog_headers)
+        if catalog_response.status_code == 403:
+            csrf_token = catalog_response.headers.get("x-csrf-token")
+            if csrf_token:
+                catalog_headers["x-csrf-token"] = csrf_token
+                catalog_response = requests.post(catalog_url, json=catalog_payload, headers=catalog_headers)
+                print("Catalog Response (with CSRF):", catalog_response.text)
+                catalog_response.raise_for_status()
+            else:
+                raise ValueError("Failed to fetch X-CSRF-Token.")
+        else:
+            catalog_response.raise_for_status()
+        catalog_data = catalog_response.json()
+        if not catalog_data.get("data"):
+            raise ValueError("Invalid item ID or item not found in the catalog.")
+        catalog_item = catalog_data["data"][0]
+        item_name = catalog_item.get("name", "Unknown Item")
+        creator_name = catalog_item.get("creator", {}).get("name", "Unknown Creator")
+        thumbnail_response = requests.get(thumbnail_url)
+        print("Thumbnail Response:", thumbnail_response.text)
+        thumbnail_response.raise_for_status()
+        thumbnail_data = thumbnail_response.json()
+        thumbnail_image_url = thumbnail_data["data"][0].get("imageUrl", None)
+        current_price = resale_data.get("recentAveragePrice", "N/A")
+        previous_price = resale_data.get("originalPrice", "N/A")
+        embed = discord.Embed(
+            title=f"Item Details: {item_name}",
+            color=discord.Color.blue()
+        )
+        embed.add_field(name="Limited", value="Yes", inline=False)
+        embed.add_field(name="Current Price", value=f"{current_price} Robux" if current_price != "N/A" else "N/A", inline=False)
+        embed.add_field(name="Previous Price", value=f"{previous_price} Robux" if previous_price != "N/A" else "N/A", inline=False)
+        embed.add_field(name="Creator", value=creator_name, inline=False)
+        embed.add_field(name="Item ID", value=item_id, inline=False)
+        if thumbnail_image_url:
+            embed.set_thumbnail(url=thumbnail_image_url)
+        await ctx.send(embed=embed)
+    except ValueError as e:
+        error_embed = discord.Embed(
+            title="Invalid Item",
+            description=str(e),
+            color=discord.Color.red()
+        )
+        await ctx.send(embed=error_embed, delete_after=30)
+    except requests.exceptions.RequestException as e:
+        log_error(e)
+        error_embed = discord.Embed(
+            title="Error",
+            description=f"Failed to fetch details for item ID `{item_id}`. Please try again later.",
+            color=discord.Color.red()
+        )
+        await ctx.send(embed=error_embed, delete_after=30)
+@bot.command(name="track_item")
+async def track_item_command(ctx, item_id: int):
+    """
+    Track a Roblox limited item by its ID for price updates.
+    """
+    guild_id = str(ctx.guild.id)
+    if guild_id not in server_item_ids:
+        server_item_ids[guild_id] = {}
+    if item_id in server_item_ids[guild_id]:
+        await ctx.send(f"Item ID `{item_id}` is already being tracked.")
+        return
+    resale_url = f"https://economy.roblox.com/v1/assets/{item_id}/resale-data"
+    try:
+        resale_response = requests.get(resale_url)
+        resale_response.raise_for_status()
+        resale_data = resale_response.json()
+        print("Resale Data:", resale_data)
+        if "recentAveragePrice" not in resale_data or "priceDataPoints" not in resale_data:
+            await ctx.send(f"Item ID `{item_id}` is not a limited item and cannot be tracked.")
+            return
+        server_item_ids[guild_id][item_id] = {"last_price": resale_data.get("recentAveragePrice", None)}
+        print(f"Tracked items for guild {guild_id}: {server_item_ids[guild_id]}")
+        await ctx.send(f"Item ID `{item_id}` has been added to the tracking list.")
+    except requests.exceptions.RequestException as e:
+        log_error(e)
+        error_embed = discord.Embed(
+            title="Error",
+            description=f"Failed to fetch details for item ID `{item_id}`. Please try again later.",
+            color=discord.Color.red()
+        )
+        await ctx.send(embed=error_embed, delete_after=30)
+@tasks.loop(minutes=10)
+async def check_item_prices():
+    """
+    Periodically check the prices of tracked limited items and send updates if they change.
+    """
+    for guild_id, items in server_item_ids.items():
+        guild = bot.get_guild(int(guild_id))
+        if not guild:
+            print(f"Guild {guild_id} not found.")
+            continue
+        soul_category = discord.utils.get(guild.categories, name="Soul")
+        status_channel = discord.utils.get(soul_category.channels, name="status-updates") if soul_category else None
+        if not status_channel:
+            print(f"Status Updates channel not found in guild {guild.name}.")
+            continue
+        print(f"Checking prices for guild {guild.name}: {items}")
+        for item_id, item_data in items.items():
+            resale_url = f"https://economy.roblox.com/v1/assets/{item_id}/resale-data"
+            try:
+                resale_response = requests.get(resale_url)
+                resale_response.raise_for_status()
+                resale_data = resale_response.json()
+                current_price = resale_data.get("recentAveragePrice", "N/A")
+                last_price = item_data["last_price"]
+                if current_price != last_price:
+                    item_data["last_price"] = current_price
+                    embed = discord.Embed(
+                        title=f"Price Update for Item ID {item_id}",
+                        description=f"The price has changed to {current_price} Robux.",
+                        color=discord.Color.green()
+                    )
+                    await status_channel.send(embed=embed)
+            except requests.exceptions.RequestException as e:
+                log_error(e)
+                print(f"Failed to fetch price for item ID {item_id}: {e}")
+                continue
+@bot.command(name="generate_username")
+async def generate_username(ctx, option: int, *, word: str = None):
+    """
+    Generate a username based on the selected option:
+    1. Word: Check if the word is already in use as a username.
+    2. Random String: Generate a 32-character random string.
+    """
+    if option == 1:
+        if not word:
+            await ctx.send("⚠️ Please provide a word to check for availability.")
+            return
+        url = "https://users.roblox.com/v1/usernames/users"
+        try:
+            response = requests.post(url, json={"usernames": [word]})
+            response.raise_for_status()
+            data = response.json()
+            if data["data"]:
+                suggestions = [f"{word}{random.randint(1, 9999)}" for _ in range(3)]
+                embed = discord.Embed(
+                    title="Username Unavailable",
+                    description=f"The username `{word}` is already in use.\n\n**Suggestions:**\n" +
+                                "\n".join([f"`{suggestion}`" for suggestion in suggestions]),
+                    color=discord.Color.red()
+                )
+            else:
+                embed = discord.Embed(
+                    title="Username Available",
+                    description=f"The username `{word}` is available!",
+                    color=discord.Color.green()
+                )
+            await ctx.send(embed=embed)
+        except requests.exceptions.RequestException as e:
+            log_error(e)
+            await ctx.send("⚠️ Failed to check username availability. Please try again later.")
+    elif option == 2:
+        random_string = ''.join(random.choices(string.ascii_letters, k=32))
+        embed = discord.Embed(
+            title="Generated Username",
+            description=f"Your randomly generated username is: `{random_string}`",
+            color=discord.Color.blue()
+        )
+        await ctx.send(embed=embed)
+    else:
+        await ctx.send("⚠️ Invalid option. Please select `1` for Word or `2` for Random String.")
+@bot.command(name="user")
+async def user_command(ctx, *, word: str):
+    """
+    Check if a username is available and suggest alternatives if it's not.
+    """
+    if len(word) > 20:
+        await ctx.send("⚠️ The username exceeds the 20-character limit. Please provide a shorter username.")
+        return
+    url = "https://users.roblox.com/v1/usernames/users"
+    try:
+        response = requests.post(url, json={"usernames": [word]})
+        response.raise_for_status()
+        data = response.json()
+        if data["data"]:
+            suggestions = []
+            for _ in range(3):
+                while True:
+                    suggestion = f"{word[:15]}{random.randint(1, 9999)}"
+                    if len(suggestion) <= 20:
+                        suggestions.append(suggestion)
+                        break
+            embed = discord.Embed(
+                title="Username Unavailable",
+                description=f"The username `{word}` is already in use.\n\n**Suggestions:**\n" +
+                            "\n".join([f"`{suggestion}`" for suggestion in suggestions]),
+                color=discord.Color.red()
+            )
+        else:
+            embed = discord.Embed(
+                title="Username Available",
+                description=f"The username `{word}` is available!",
+                color=discord.Color.green()
+            )
+        await ctx.send(embed=embed)
+    except requests.exceptions.RequestException as e:
+        log_error(e)
+        await ctx.send("⚠️ Failed to check username availability. Please try again later.")
+@bot.command(name="string")
+async def string_command(ctx):
+    """
+    Generate a 20-character random string and check if it's available as a username.
+    """
+    url = "https://users.roblox.com/v1/usernames/users"
+    while True:
+        random_string = ''.join(random.choices(string.ascii_letters, k=20))
+        try:
+            response = requests.post(url, json={"usernames": [random_string]})
+            response.raise_for_status()
+            data = response.json()
+            if not data["data"]:
+                break
+        except requests.exceptions.RequestException as e:
+            log_error(e)
+            await ctx.send("⚠️ Failed to check username availability. Please try again later.")
+            return
+    embed = discord.Embed(
+        title="Generated String",
+        description=f"Your randomly generated username is: `{random_string}`",
+        color=discord.Color.blue()
+    )
+    await ctx.send(embed=embed)
 if __name__ == "__main__":
     bot.run(TOKEN)
