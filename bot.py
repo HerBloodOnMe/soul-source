@@ -71,7 +71,7 @@ tree = bot.tree
 # Tracks previous statuses per server
 data_cache = {}
 
-GROUP_ID = 15574158
+GROUP_ID = # Remove this comment and add your group ID
 group_cache = {
     "members": set(),
     "last_shout": None
@@ -84,12 +84,6 @@ STATUS_MAP = {
     2: "In Game",
     3: "In Studio"
 }
-
-
-
-GITHUB_REPO = "HerBloodOnMe/soul-bot"  # Replace with your GitHub username/repository
-CHANGELOG_PATH = "changelog.md"  # Ensure the file name matches exactly
-RAW_CHANGELOG_URL = "https://raw.githubusercontent.com/HerBloodOnMe/soul-bot/main/changelog.md"
 
 LAST_CHANGELOG_FILE = "last_changelog.json"
 
