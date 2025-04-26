@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.1.10] - 2025-05-06
+### Added
+- **New Website Integration**:
+  - Updated all embeds to include a clickable link to the new website: [https://www.soullessgraves.us/#].
+  - Improved visibility and accessibility of the website link in all bot messages.
+- **Clickable Links in Embeds**:
+  - Replaced footer text links with clickable links in the embed descriptions for better user experience.
+
+### Changed
+- **Welcome Message**:
+  - Updated the welcome message to include a clickable link to the website in the description.
+- **Support Embed**:
+  - Enhanced the `/support` command to include a clickable link to the website for more information.
+- **Changelog Embed**:
+  - Updated the changelog embed to include a clickable link to the website in the description.
+
+### Fixed
+- **Footer Link Issue**:
+  - Resolved an issue where links in the footer were not clickable by moving them to the embed description.
+- **Consistency Across Embeds**:
+  - Ensured all embeds across the bot now have a consistent clickable link to the website.
+
 ## [1.1.9] - 2025-04-24
 ### Added
 - **Slash Command Migration**:
