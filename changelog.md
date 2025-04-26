@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.1.10] - 2025-05-06
+## [1.1.10] - 2025-04-26
 ### Added
 - **New Website Integration**:
   - Updated all embeds to include a clickable link to the new website: [https://www.soullessgraves.us/#].
