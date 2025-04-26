@@ -15,11 +15,15 @@
 - **Item Details**: Fetch detailed information about limited Roblox items, including price history and creator details (`/item`).
 - **Daily Reports**: Receive comprehensive daily summaries of group activities, including new members, shout updates, and item price changes.
 - **Game Alerts**: Stay informed when tracked users join specific games.
+- **Roblox Version Tracking**:
+  - Use `/version` to display the current Roblox version.
+  - Automatically detect Roblox updates and send notifications to the `updates` channel.
+- **Group Monitoring**: Track group membership changes (joins and leaves) and shout updates in real time.
+- **Group Details**: Fetch detailed information about Roblox groups, including owner details, member count, shout, and creation date (`/group`).
 - **Error Logging**: Automatically logs errors to a file for easier debugging and maintenance.
 - **Slash Command Support**: All commands are now implemented as slash commands for a more user-friendly experience.
 - **Dynamic Setup**: Easily set up or remove the bot's categories and channels with `/setup` and `/unsetup`.
 - **Changelog Updates**: Automatically fetch and share changelogs in a designated Discord channel when the bot starts or detects changes.
-- **Group Monitoring**: Track group membership changes (joins and leaves) and shout updates in real time.
 
 ## How It Works
 
@@ -39,6 +43,8 @@ Here’s a quick overview of SOUL’s core commands:
 - `/trackitem <item_id>`: Track a Roblox limited item by its ID for price updates.
 - `/whois <user_id or username>`: Fetch details about a Roblox user by their ID or username.
 - `/whois_display <display_name>`: Fetch details about Roblox users by their display name.
+- `/group <group_id>`: Fetch details about a Roblox group, including owner, members, shout, and creation date.
+- `/version`: Display the current Roblox version.
 - `/setup`: Set up the bot's categories and channels.
 - `/unsetup`: Remove the bot's categories and channels.
 
