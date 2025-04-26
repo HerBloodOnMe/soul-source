@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.1.11] - 2025-04-26
+### Added
+- **Roblox Version Tracking**:
+  - Added `/version` command to display the current Roblox version.
+  - Implemented a background task to check for Roblox updates every 10 minutes.
+  - Sends an embed notification to the `updates` channel when a new Roblox version is detected.
+
+### Fixed
+- **Group Command**:
+  - Resolved an issue where group thumbnails failed to load. A fallback placeholder image is now used if the group logo is unavailable.
+  - Correctly displays the group owner's username and ID.
+  - Added proper formatting for the group creation date.
+
+### Changed
+- **Improved Error Handling**:
+  - Enhanced error handling for API requests in the `/group` and `/version` commands.
+  - Added debug logs for better troubleshooting.
+
+### Notes
+- Ensure the `updates` channel exists in the `Soul` category for Roblox update notifications.
+- The bot now tracks the last known Roblox version in `roblox_version.json` for update detection.
+
 ## [1.1.10] - 2025-04-26
 ### Added
 - **New Website Integration**:
