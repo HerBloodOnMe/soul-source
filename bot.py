@@ -76,7 +76,7 @@ tree = bot.tree
 # Tracks previous statuses per server
 data_cache = {}
 
-GROUP_ID = # add a group ID
+GROUP_ID = 15574158
 group_cache = {
     "members": set(),
     "last_shout": None
@@ -239,11 +239,11 @@ async def check_and_send_changelog():
 
                 # Create an embed for the changelog
                 embed = discord.Embed(
-                    title=f"Changelog Update - {version}",
-                    description=latest_changelog,
+                    title="Changelog Update",
+                    description="Visit [SOUL's Website](https://www.soullessgraves) for more information and support.",
                     color=discord.Color.blue()
                 )
-                embed.set_footer(text="Visit https://www.soullessgraves for more information.")
+                embed.set_footer(text="Stay updated with SOUL Bot!")
 
                 # Send the embed
                 try:
@@ -510,7 +510,7 @@ async def on_guild_join(guild):
         color=discord.Color.blue()
     )
     welcome_embed.add_field(name="Overview", value=overview_text[:1024], inline=False)
-    welcome_embed.set_footer(text="Visit https://www.soullessgraves for more information and support.")
+    welcome_embed.embed.description = "Visit [SOUL's Website](https://www.soullessgraves) for more information and support."
 
     # Create the Commands Page embeds
     commands_embeds = []
@@ -520,7 +520,7 @@ async def on_guild_join(guild):
             description=chunk,
             color=discord.Color.blue()
         )
-        commands_embed.set_footer(text="Visit https://www.soullessgraves for more information and support.")
+        commands_embed.embed.description = "Visit [SOUL's Website](https://www.soullessgraves) for more information and support."
         commands_embeds.append(commands_embed)
 
     # Send the embeds sequentially
@@ -1231,7 +1231,7 @@ async def support_command(interaction: discord.Interaction):
     embed.add_field(name="/setup", value="Set up the bot's categories and channels.\nUsage: `/setup`", inline=False)
     embed.add_field(name="/unsetup", value="Remove the bot's categories and channels.\nUsage: `/unsetup`", inline=False)
     embed.add_field(name="/support", value="Show this help message.\nUsage: `/support`", inline=False)
-    embed.set_footer(text="Visit https://www.soullessgraves for more information and support.")
+    embed.embed.description = "Visit [SOUL's Website](https://www.soullessgraves) for more information and support."
 
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
