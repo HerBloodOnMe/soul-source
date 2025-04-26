@@ -91,6 +91,7 @@ STATUS_MAP = {
 }
 
 LAST_CHANGELOG_FILE = "last_changelog.json"
+VERSION_FILE = "roblox_version.json"
 
 def load_last_changelog():
     try:
@@ -108,6 +109,32 @@ def save_last_changelog(version):
             json.dump({"version": version}, file)
     except Exception as e:
         log_error(e)
+
+def load_last_version():
+    """
+    Load the last known Roblox version from a file.
+    """
+    try:
+        with open(VERSION_FILE, "r") as file:
+            data = json.load(file)
+            return data.get("version", None)
+    except FileNotFoundError:
+        return None
+    except Exception as e:
+        log_error(e)
+        print(f"Failed to load last version: {e}")
+        return None
+
+def save_last_version(version):
+    """
+    Save the current Roblox version to a file.
+    """
+    try:
+        with open(VERSION_FILE, "w") as file:
+            json.dump({"version": version}, file)
+    except Exception as e:
+        log_error(e)
+        print(f"Failed to save last version: {e}")
 
 
         # Decode the content from Base64
@@ -167,12 +194,14 @@ def get_user_details(user_id: str):
         username = user_data.get("name", "No username")
         description = user_data.get("description", "No description available.")
         is_banned = user_data.get("isBanned", False)
+        created = user_data.get("created", "Unknown")
 
         return {
             "display_name": display_name,
             "username": username,
             "description": description,
-            "is_banned": is_banned
+            "is_banned": is_banned,
+            "created": created
         }
 
     except Exception as e:
@@ -182,7 +211,8 @@ def get_user_details(user_id: str):
             "display_name": "No display name",
             "username": "No username",
             "description": "No description available.",
-            "is_banned": False
+            "is_banned": False,
+            "created": "Unknown"
         }
 
 def get_file_hash(file_path):
@@ -279,9 +309,53 @@ async def pull_and_check_changelog():
 async def update_changelog_task():
     await pull_and_check_changelog()
 
+@tasks.loop(minutes=10)  # Adjust the interval as needed
+async def check_roblox_updates():
+    """
+    Periodically check for Roblox updates and send an embed if a new version is detected.
+    """
+    last_version = load_last_version()
+    current_version = fetch_roblox_version()
+
+    if not current_version:
+        print("Failed to fetch the current Roblox version.")
+        return
+
+    if last_version != current_version:
+        # Save the new version
+        save_last_version(current_version)
+
+        # Create an embed for the update
+        embed = discord.Embed(
+            title="Roblox Update Detected!",
+            description=f"Roblox has been updated to version: **{current_version}**",
+            color=discord.Color.green()
+        )
+        embed.add_field(name="Previous Version", value=last_version if last_version else "Unknown", inline=False)
+        embed.add_field(name="New Version", value=current_version, inline=False)
+        embed.set_footer(text="Stay updated with SOUL Bot!")
+
+        # Send the embed to all servers with a specific channel
+        for guild in bot.guilds:
+            soul_category = discord.utils.get(guild.categories, name="Soul")
+            if not soul_category:
+                continue
+
+            updates_channel = discord.utils.get(soul_category.channels, name="updates")
+            if updates_channel:
+                try:
+                    await updates_channel.send(embed=embed)
+                    print(f"Update notification sent to {guild.name} in {updates_channel.name}.")
+                except Exception as e:
+                    log_error(e)
+                    print(f"Failed to send update notification to {guild.name}: {e}")
+
 @bot.event
 async def on_ready():
     print(f"Bot connected as {bot.user}")
+
+    # Start the Roblox update check task
+    check_roblox_updates.start()
 
     # Set the bot's status to "Watching /users"
     await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name="/users"))
@@ -829,6 +903,10 @@ async def whois_command(interaction: discord.Interaction, user_input: str):
         log_error(e)
         avatar_url = None
 
+    # Add account creation date
+    creation_date = user_details.get("created", "Unknown")
+    formatted_creation_date = creation_date.split("T")[0] if creation_date != "Unknown" else "Unknown"
+
     # Create an embed for the user details
     embed = discord.Embed(
         title=f"Whois for {user_details['username']}",
@@ -837,6 +915,7 @@ async def whois_command(interaction: discord.Interaction, user_input: str):
     )
     embed.add_field(name="User ID", value=user_id, inline=False)
     embed.add_field(name="Is Banned", value="Yes" if user_details["is_banned"] else "No", inline=False)
+    embed.add_field(name="Account Created", value=formatted_creation_date, inline=False)
     embed.set_thumbnail(url=avatar_url)
 
     # Send the embed
@@ -1266,6 +1345,112 @@ async def tracking_command(interaction: discord.Interaction):
         embed.add_field(name="User ID", value=user_id, inline=False)
 
     await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
+@tree.command(name="group", description="Fetch details about a Roblox group by its ID.")
+@app_commands.describe(group_id="The ID of the Roblox group to search for.")
+async def group_command(interaction: discord.Interaction, group_id: int):
+    group_details_url = f"https://groups.roblox.com/v1/groups/{group_id}"
+    logo_url = f"https://thumbnails.roblox.com/v1/groups/icons?groupIds={group_id}&size=512x512&format=Png&isCircular=false"
+
+    try:
+        # Fetch group details
+        response = requests.get(group_details_url)
+        response.raise_for_status()
+        group_data = response.json()
+
+        # Debug log for API response
+        print(f"Group API Response: {group_data}")
+
+        # Extract group details
+        name = group_data.get("name", "Unknown Group")
+        owner_data = group_data.get("owner", {})
+        owner_id = owner_data.get("userId", "No Owner")
+        owner_username = owner_data.get("username", "No Username")
+        member_count = group_data.get("memberCount", "N/A")
+        shout = group_data.get("shout", {}).get("body", "No shout available.")
+
+        # Attempt to fetch group logo
+        logo_image_url = None
+        try:
+            logo_response = requests.get(logo_url)
+            logo_response.raise_for_status()
+            logo_data = logo_response.json()
+            logo_image_url = logo_data["data"][0].get("imageUrl", None)
+        except requests.exceptions.RequestException as e:
+            print(f"⚠️ Failed to fetch group logo: {e}")
+            logo_image_url = "https://via.placeholder.com/512?text=No+Logo"  # Fallback placeholder image
+
+        # Create an embed for the group details
+        embed = discord.Embed(
+            title=f"Group Details: {name}",
+            description=f"**Owner:** {owner_username} (ID: {owner_id})\n**Group Link:** [Visit Group](https://www.roblox.com/groups/{group_id})",
+            color=discord.Color.blue()
+        )
+        embed.add_field(name="Members", value=f"{member_count:,}" if isinstance(member_count, int) else member_count, inline=False)
+        embed.add_field(name="Shout", value=shout, inline=False)
+        embed.add_field(name="Group ID", value=group_id, inline=False)
+
+        # Add the group's logo as the embed thumbnail (if available)
+        if logo_image_url:
+            embed.set_thumbnail(url=logo_image_url)
+
+        # Send the embed
+        await interaction.response.send_message(embed=embed, ephemeral=False)
+
+    except KeyError as e:
+        print(f"KeyError: {e}")
+        error_embed = discord.Embed(
+            title="Invalid Group ID",
+            description=f"No group found with the ID `{group_id}`.",
+            color=discord.Color.red()
+        )
+        await interaction.response.send_message(embed=error_embed, ephemeral=True)
+    except requests.exceptions.RequestException as e:
+        log_error(e)
+        print(f"RequestException: {e}")
+        error_embed = discord.Embed(
+            title="Error",
+            description=f"Failed to fetch details for group ID `{group_id}`. Please try again later.",
+            color=discord.Color.red()
+        )
+        await interaction.response.send_message(embed=error_embed, ephemeral=True)
+
+@tree.command(name="version", description="Show the current Roblox version.")
+async def version_command(interaction: discord.Interaction):
+    """
+    Fetch and display the current Roblox version.
+    """
+    current_version = fetch_roblox_version()
+    if current_version:
+        embed = discord.Embed(
+            title="Current Roblox Version",
+            description=f"The current Roblox version is: **{current_version}**",
+            color=discord.Color.blue()
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=False)
+    else:
+        error_embed = discord.Embed(
+            title="Error",
+            description="Failed to fetch the current Roblox version. Please try again later.",
+            color=discord.Color.red()
+        )
+        await interaction.response.send_message(embed=error_embed, ephemeral=True)
+
+
+def fetch_roblox_version():
+    """
+    Fetch the current Roblox version from the API.
+    """
+    url = "https://setup.rbxcdn.com/version"
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        return response.text.strip()  # The version is returned as plain text
+    except requests.exceptions.RequestException as e:
+        log_error(e)
+        print(f"Failed to fetch Roblox version: {e}")
+        return None
 
 
 if __name__ == "__main__":
